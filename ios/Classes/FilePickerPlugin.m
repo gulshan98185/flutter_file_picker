@@ -387,12 +387,18 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:results.count];
     
+    //To keep same file order while import from gallery, manage index here.
+    for (int i = 0; i < results.count; i++) {
+        [urls addObject:[NSURL URLWithString:@""]];
+    }
+
     self.group = dispatch_group_create();
     
     if(self->_eventSink != nil) {
         self->_eventSink([NSNumber numberWithBool:YES]);
     }
     
+    int indexOrder = 0;
     for (PHPickerResult *result in results) {
         dispatch_group_enter(_group);
         [result.itemProvider loadFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
@@ -422,10 +428,11 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                 Log("%@ Error while caching picked file: %@", self, copyError);
                 return;
             }
-            
-            [urls addObject:cachedUrl];
+            urls[indexOrder] = cachedUrl;
+            //[urls addObject:cachedUrl];
             dispatch_group_leave(self->_group);
         }];
+        indexOrder++;
     }
     
     dispatch_group_notify(_group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),^{
@@ -433,7 +440,14 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
         if(self->_eventSink != nil) {
             self->_eventSink([NSNumber numberWithBool:NO]);
         }
-        [self handleResult:urls];
+        //Remove empty URLs
+        NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
+        for (int i = 0; i < results.count; i++) {
+            if(![urls[i].absoluteString isEqualToString:@""]){
+                [urlsNew addObject:urls[i]];
+            }
+        }
+        [self handleResult:urlsNew];
     });
 }
 
