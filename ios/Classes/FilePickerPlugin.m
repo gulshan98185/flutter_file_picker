@@ -58,7 +58,7 @@
             }
         }
     }
-    
+
     UIViewController *topController = windowToUse.rootViewController;
     while (topController.presentedViewController) {
         topController = topController.presentedViewController;
@@ -111,7 +111,7 @@
     
     NSDictionary * arguments = call.arguments;
     BOOL isMultiplePick = ((NSNumber*)[arguments valueForKey:@"allowMultipleSelection"]).boolValue;
-    
+
     self.allowCompression = ((NSNumber*)[arguments valueForKey:@"allowCompression"]).boolValue;
     self.loadDataToMemory = ((NSNumber*)[arguments valueForKey:@"withData"]).boolValue;
     
@@ -146,7 +146,7 @@
         _result([FlutterError errorWithCode:@"Unsupported picker type"
                                     message:@"Support for the Audio picker is not compiled in. Remove the Pod::PICKER_AUDIO=false statement from your Podfile."
                                     details:nil]);
-#endif      
+#endif
     } else {
         result(FlutterMethodNotImplemented);
         _result = nil;
@@ -326,7 +326,7 @@
 #ifdef PICKER_AUDIO
 - (void) resolvePickAudioWithMultiPick:(BOOL)isMultiPick {
     
-    
+
     self.audioPickerController = [[MPMediaPickerController alloc] initWithMediaTypes:MPMediaTypeAnyAudio];
     self.audioPickerController.delegate = self;
     self.audioPickerController.presentationController.delegate = self;
@@ -339,7 +339,7 @@
         }
     });
 
-    
+
     [[self viewControllerWithWindow:nil] presentViewController:self.audioPickerController animated:YES completion:nil];
 }
 #endif // PICKER_AUDIO
@@ -388,7 +388,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
             [newUrls addObject:tempURL];
         }
     }
-    
+
     [self.documentPickerController dismissViewControllerAnimated:YES completion:nil];
     
     if(controller.documentPickerMode == UIDocumentPickerModeOpen) {
@@ -457,7 +457,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     if(_result == nil) {
         return;
     }
-    
+
     if(self.group != nil) {
         return;
     }
@@ -475,6 +475,11 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:results.count];
     
+    //To keep same file order while import from gallery, manage index here.
+    for (int i = 0; i < results.count; i++) {
+        [urls addObject:[NSURL URLWithString:@""]];
+    }
+
     self.group = dispatch_group_create();
     
     if(self->_eventSink != nil) {
@@ -482,7 +487,8 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     }
     
     __block NSError * blockError;
-    
+
+    int indexOrder = 0;
     for (PHPickerResult *result in results) {
         dispatch_group_enter(_group);
         [result.itemProvider loadFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
@@ -498,13 +504,13 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
             NSString * extension = [filename pathExtension];
             NSFileManager * fileManager = [[NSFileManager alloc] init];
             NSURL * cachedUrl;
-            
+
             // Check for live photos
             if(self.allowCompression && [extension isEqualToString:@"pvt"]) {
                 NSArray * files = [fileManager contentsOfDirectoryAtURL:url includingPropertiesForKeys:@[] options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
-                
+
                 for (NSURL * item in files) {
-                    
+
                     if (UTTypeConformsTo(UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, CFBridgingRetain([item pathExtension]), NULL), kUTTypeImage)) {
                         NSData *assetData = [NSData dataWithContentsOfURL:item];
                         //Convert any type of image to jpeg
@@ -521,7 +527,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                         if([fileManager fileExistsAtPath:tmpFile]) {
                             [fileManager removeItemAtPath:tmpFile error:nil];
                         }
-                        
+
                         if([fileManager createFileAtPath:tmpFile contents:data attributes:nil]) {
                             filename = tmpFile;
                         } else {
@@ -532,28 +538,31 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                 }
             } else {
                 NSString * cachedFile = [NSTemporaryDirectory() stringByAppendingPathComponent:filename];
-                
+
                 if([fileManager fileExistsAtPath:cachedFile]) {
                     [fileManager removeItemAtPath:cachedFile error:NULL];
                 }
-                
+
                 cachedUrl = [NSURL fileURLWithPath: cachedFile];
-                
+
                 NSError *copyError;
                 [fileManager copyItemAtURL: url
                                      toURL: cachedUrl
                                      error: &copyError];
-                
+
                 if (copyError) {
                     Log("%@ Error while caching picked file: %@", self, copyError);
                     return;
                 }
             }
-            
-            
-            [urls addObject:cachedUrl];
+
+
+            //[urls addObject:cachedUrl];
+            urls[indexOrder] = cachedUrl;
+            //[urls addObject:cachedUrl];
             dispatch_group_leave(self->_group);
         }];
+        indexOrder++;
     }
     
     dispatch_group_notify(_group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),^{
@@ -561,7 +570,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
         if(self->_eventSink != nil) {
             self->_eventSink([NSNumber numberWithBool:NO]);
         }
-        
+
         if(blockError) {
             self->_result([FlutterError errorWithCode:@"file_picker_error"
                                         message:@"Temporary file could not be created"
@@ -569,7 +578,15 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
             self->_result = nil;
             return;
         }
-        [self handleResult:urls];
+        //Remove empty URLs
+        NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
+        for (int i = 0; i < results.count; i++) {
+            if(![urls[i].absoluteString isEqualToString:@""]){
+                [urlsNew addObject:urls[i]];
+            }
+        }
+        //[self handleResult:urls];
+        [self handleResult:urlsNew];
     });
 }
 
