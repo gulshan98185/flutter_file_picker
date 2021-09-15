@@ -202,7 +202,7 @@
         PHPickerViewController *pickerViewController = [[PHPickerViewController alloc] initWithConfiguration:config];
         pickerViewController.delegate = self;
         pickerViewController.presentationController.delegate = self;
-        [[self viewControllerWithWindow:nil] presentViewController:pickerViewController animated:YES completion:nil];
+        [self.viewController presentViewController:pickerViewController animated:YES completion:nil];
         return;
     }
 #endif
@@ -592,6 +592,14 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 
 #endif // PHPicker
 #endif // PICKER_MEDIA
+
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
+  if (_result != nil) {
+      _result(nil);
+      _result = nil;
+  }
+}
+
 
 #ifdef PICKER_AUDIO
 // AudioPicker delegate
