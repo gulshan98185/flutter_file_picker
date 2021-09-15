@@ -156,6 +156,7 @@
         
         PHPickerViewController *pickerViewController = [[PHPickerViewController alloc] initWithConfiguration:config];
         pickerViewController.delegate = self;
+        pickerViewController.presentationController.delegate = self;
         [self.viewController presentViewController:pickerViewController animated:YES completion:nil];
         return;
     }
@@ -452,6 +453,13 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 }
 
 #endif
+
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
+  if (_result != nil) {
+      _result(nil);
+      _result = nil;
+  }
+}
 
 
 // AudioPicker delegate
