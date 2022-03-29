@@ -410,43 +410,43 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     }
     
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:results.count];
-    
-    //To keep same file order while import from gallery, manage index here.
-    for (int i = 0; i < results.count; i++) {
-        [urls addObject:[NSURL URLWithString:@""]];
-    }
+
+        //To keep same file order while import from gallery, manage index here.
+        for (int i = 0; i < results.count; i++) {
+            [urls addObject:[NSURL URLWithString:@""]];
+        }
 
     self.group = dispatch_group_create();
-    
+
     if(self->_eventSink != nil) {
         self->_eventSink([NSNumber numberWithBool:YES]);
     }
 
-    int indexOrder = 0;
     __block NSError * blockError;
+    int indexOrder = 0;
     for (PHPickerResult *result in results) {
         dispatch_group_enter(_group);
         [result.itemProvider loadFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
-            
+
             if(url == nil) {
                 blockError = error;
                 Log("Could not load the picked given file: %@", blockError);
                 dispatch_group_leave(self->_group);
                 return;
             }
-            
+
             NSString * filename = url.lastPathComponent;
             NSString * extension = [filename pathExtension];
             NSFileManager * fileManager = [[NSFileManager alloc] init];
             NSURL * cachedUrl;
-            
+
             // Check for live photos
             if(self.allowCompression && [extension isEqualToString:@"pvt"]) {
                 NSArray * files = [fileManager contentsOfDirectoryAtURL:url includingPropertiesForKeys:@[] options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
-                
+
                 for (NSURL * item in files) {
                     if (UTTypeConformsTo(UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, CFBridgingRetain([item pathExtension]), NULL), kUTTypeImage)) {
-                        
+
                         UIImage * img = [UIImage imageWithContentsOfFile:item.path];
                         NSString * fileName = [[item.path lastPathComponent] stringByDeletingPathExtension];
                         NSData * data = UIImageJPEGRepresentation(img, 1);
@@ -456,7 +456,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                         if([fileManager fileExistsAtPath:tmpFile]) {
                             [fileManager removeItemAtPath:tmpFile error:nil];
                         }
-                        
+
                         if([fileManager createFileAtPath:tmpFile contents:data attributes:nil]) {
                             filename = tmpFile;
                         } else {
@@ -467,73 +467,56 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                 }
             } else {
                 NSString * cachedFile = [NSTemporaryDirectory() stringByAppendingPathComponent:filename];
-                
+
                 if([fileManager fileExistsAtPath:cachedFile]) {
                     [fileManager removeItemAtPath:cachedFile error:NULL];
                 }
-                
+
                 cachedUrl = [NSURL fileURLWithPath: cachedFile];
-                
+
                 NSError *copyError;
                 [fileManager copyItemAtURL: url
                                      toURL: cachedUrl
                                      error: &copyError];
-                
+
                 if (copyError) {
                     Log("%@ Error while caching picked file: %@", self, copyError);
                     return;
                 }
             }
 
-            NSURL * cachedUrl = [NSURL fileURLWithPath: cachedFile];
-            NSError *copyError;
-            [NSFileManager.defaultManager copyItemAtURL: url
-                                                  toURL: cachedUrl
-                                                  error: &copyError];
-            
-            if (copyError) {
-                Log("%@ Error while caching picked file: %@", self, copyError);
-                return;
-            }
+
             urls[indexOrder] = cachedUrl;
             //[urls addObject:cachedUrl];
             dispatch_group_leave(self->_group);
         }];
         indexOrder++;
     }
-    
+
     dispatch_group_notify(_group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),^{
         self->_group = nil;
         if(self->_eventSink != nil) {
             self->_eventSink([NSNumber numberWithBool:NO]);
         }
-        //Remove empty URLs
-        NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
-        for (int i = 0; i < results.count; i++) {
-            if(![urls[i].absoluteString isEqualToString:@""]){
-                [urlsNew addObject:urls[i]];
-            }
-        }
-        
+
         if(blockError) {
             self->_result([FlutterError errorWithCode:@"file_picker_error"
                                         message:@"Temporary file could not be created"
                                         details:blockError.description]);
             self->_result = nil;
             return;
-        }
-        [self handleResult:urlsNew];
+        }        //Remove empty URLs
+                 NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
+                 for (int i = 0; i < results.count; i++) {
+                     if(![urls[i].absoluteString isEqualToString:@""]){
+                         [urlsNew addObject:urls[i]];
+                     }
+                 }
+                 [self handleResult:urlsNew];
     });
 }
 
 #endif
-
-- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
-  if (_result != nil) {
-      _result(nil);
-      _result = nil;
-  }
-}
 
 
 // AudioPicker delegate
@@ -541,26 +524,26 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 {
     [mediaPicker dismissViewControllerAnimated:YES completion:NULL];
     int numberOfItems = (int)[mediaItemCollection items].count;
-    
+
     if(numberOfItems == 0) {
         return;
     }
-    
+
     if(_eventSink != nil) {
         _eventSink([NSNumber numberWithBool:YES]);
     }
-    
+
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:numberOfItems];
-    
+
     for(MPMediaItemCollection * item in [mediaItemCollection items]) {
         NSURL * cachedAsset = [FileUtils exportMusicAsset: [item valueForKey:MPMediaItemPropertyAssetURL] withName: [item valueForKey:MPMediaItemPropertyTitle]];
         [urls addObject: cachedAsset];
     }
-    
+
     if(_eventSink != nil) {
         _eventSink([NSNumber numberWithBool:NO]);
     }
-    
+
     if(urls.count == 0) {
         Log(@"Couldn't retrieve the audio file path, either is not locally downloaded or the file is DRM protected.");
     }
