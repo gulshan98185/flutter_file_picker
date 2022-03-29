@@ -7,13 +7,13 @@
 @interface FilePickerPlugin() <DKImageAssetExporterObserver>
 @property (nonatomic) FlutterResult result;
 @property (nonatomic) FlutterEventSink eventSink;
-@property (nonatomic, readonly) UIViewController *viewController;
 @property (nonatomic) UIImagePickerController *galleryPickerController;
 @property (nonatomic) UIDocumentPickerViewController *documentPickerController;
 @property (nonatomic) UIDocumentInteractionController *interactionController;
 @property (nonatomic) MPMediaPickerController *audioPickerController;
 @property (nonatomic) NSArray<NSString *> * allowedExtensions;
 @property (nonatomic) BOOL loadDataToMemory;
+@property (nonatomic) BOOL allowCompression;
 @property (nonatomic) dispatch_group_t group;
 @end
 
@@ -40,12 +40,22 @@
     return self;
 }
 
-- (UIViewController *)viewController {
-    UIViewController *rootViewController = [UIApplication sharedApplication].delegate.window.rootViewController;
-    while (rootViewController.presentedViewController) {
-        rootViewController = rootViewController.presentedViewController;
+- (UIViewController *)viewControllerWithWindow:(UIWindow *)window {
+    UIWindow *windowToUse = window;
+    if (windowToUse == nil) {
+        for (UIWindow *window in [UIApplication sharedApplication].windows) {
+            if (window.isKeyWindow) {
+                windowToUse = window;
+                break;
+            }
+        }
     }
-    return rootViewController;
+    
+    UIViewController *topController = windowToUse.rootViewController;
+    while (topController.presentedViewController) {
+        topController = topController.presentedViewController;
+    }
+    return topController;
 }
 
 - (FlutterError *)onListenWithArguments:(id)arguments eventSink:(FlutterEventSink)events {
@@ -87,6 +97,8 @@
     
     NSDictionary * arguments = call.arguments;
     BOOL isMultiplePick = ((NSNumber*)[arguments valueForKey:@"allowMultipleSelection"]).boolValue;
+    
+    self.allowCompression = ((NSNumber*)[arguments valueForKey:@"allowCompression"]).boolValue;
     self.loadDataToMemory = ((NSNumber*)[arguments valueForKey:@"withData"]).boolValue;
     
     if([call.method isEqualToString:@"any"] || [call.method containsString:@"custom"]) {
@@ -100,7 +112,7 @@
             [self resolvePickDocumentWithMultiPick:isMultiplePick pickDirectory:NO];
         }
     } else if([call.method isEqualToString:@"video"] || [call.method isEqualToString:@"image"] || [call.method isEqualToString:@"media"]) {
-        [self resolvePickMedia:[FileUtils resolveMediaType:call.method] withMultiPick:isMultiplePick withCompressionAllowed:[arguments valueForKey:@"allowCompression"]];
+        [self resolvePickMedia:[FileUtils resolveMediaType:call.method] withMultiPick:isMultiplePick withCompressionAllowed:self.allowCompression];
     } else if([call.method isEqualToString:@"audio"]) {
         [self resolvePickAudioWithMultiPick: isMultiplePick];
     } else {
@@ -134,9 +146,9 @@
     }
     
     self.documentPickerController.delegate = self;
-    self.galleryPickerController.allowsEditing = NO;
+    self.documentPickerController.presentationController.delegate = self;
     
-    [self.viewController presentViewController:self.documentPickerController animated:YES completion:nil];
+    [[self viewControllerWithWindow:nil] presentViewController:self.documentPickerController animated:YES completion:nil];
 }
 
 - (void) resolvePickMedia:(MediaType)type withMultiPick:(BOOL)multiPick withCompressionAllowed:(BOOL)allowCompression  {
@@ -145,10 +157,7 @@
     if (@available(iOS 14, *)) {
         PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
         config.filter = type == IMAGE ? [PHPickerFilter imagesFilter] : type == VIDEO ? [PHPickerFilter videosFilter] : [PHPickerFilter anyFilterMatchingSubfilters:@[[PHPickerFilter videosFilter], [PHPickerFilter imagesFilter]]];
-
-        if(type == VIDEO) {
-            config.preferredAssetRepresentationMode = PHPickerConfigurationAssetRepresentationModeCurrent;
-        }
+        config.preferredAssetRepresentationMode = self.allowCompression ? PHPickerConfigurationAssetRepresentationModeCompatible : PHPickerConfigurationAssetRepresentationModeCurrent;
         
         if(multiPick) {
             config.selectionLimit = 0;
@@ -157,7 +166,7 @@
         PHPickerViewController *pickerViewController = [[PHPickerViewController alloc] initWithConfiguration:config];
         pickerViewController.delegate = self;
         pickerViewController.presentationController.delegate = self;
-        [self.viewController presentViewController:pickerViewController animated:YES completion:nil];
+        [[self viewControllerWithWindow:nil] presentViewController:pickerViewController animated:YES completion:nil];
         return;
     }
 #endif
@@ -172,6 +181,7 @@
     
     self.galleryPickerController = [[UIImagePickerController alloc] init];
     self.galleryPickerController.delegate = self;
+    self.galleryPickerController.presentationController.delegate = self;
     self.galleryPickerController.videoQuality = UIImagePickerControllerQualityTypeHigh;
     
     switch (type) {
@@ -194,7 +204,7 @@
             break;
     }
     
-    [self.viewController presentViewController:self.galleryPickerController animated:YES completion:nil];
+    [[self viewControllerWithWindow:nil] presentViewController:self.galleryPickerController animated:YES completion:nil];
     
     
 }
@@ -205,7 +215,7 @@
     UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"" message:@"" preferredStyle:UIAlertControllerStyleAlert];
     UIActivityIndicatorView* indicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
     
-    UIViewController *currentViewController = self.viewController;
+    UIViewController *currentViewController = [self viewControllerWithWindow:nil];
     if(_eventSink == nil) {
         // Create alert dialog for asset caching
         [alert.view setCenter: currentViewController.view.center];
@@ -273,17 +283,26 @@
         [self handleResult: paths];
     }];
     
-    [self.viewController presentViewController:dkImagePickerController animated:YES completion:nil];
+    [[self viewControllerWithWindow:nil] presentViewController:dkImagePickerController animated:YES completion:nil];
 }
 
 - (void) resolvePickAudioWithMultiPick:(BOOL)isMultiPick {
     
+    
     self.audioPickerController = [[MPMediaPickerController alloc] initWithMediaTypes:MPMediaTypeAnyAudio];
     self.audioPickerController.delegate = self;
+    self.audioPickerController.presentationController.delegate = self;
     self.audioPickerController.showsCloudItems = YES;
     self.audioPickerController.allowsPickingMultipleItems = isMultiPick;
     
-    [self.viewController presentViewController:self.audioPickerController animated:YES completion:nil];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        if([self viewControllerWithWindow:nil].presentedViewController == nil){
+            Log("Exporting assets, this operation may take a while if remote (iCloud) assets are being cached.");
+        }
+    });
+
+    
+    [[self viewControllerWithWindow:nil] presentViewController:self.audioPickerController animated:YES completion:nil];
 }
 
 - (void) handleResult:(id) files {
@@ -371,6 +390,10 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 
 -(void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results API_AVAILABLE(ios(14)){
     
+    if(_result == nil) {
+        return;
+    }
+    
     if(self.group != nil) {
         return;
     }
@@ -398,27 +421,70 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     if(self->_eventSink != nil) {
         self->_eventSink([NSNumber numberWithBool:YES]);
     }
-    
+
     int indexOrder = 0;
+    __block NSError * blockError;
     for (PHPickerResult *result in results) {
         dispatch_group_enter(_group);
         [result.itemProvider loadFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
             
             if(url == nil) {
-                Log("Could not load the picked given file: %@", error);
+                blockError = error;
+                Log("Could not load the picked given file: %@", blockError);
                 dispatch_group_leave(self->_group);
                 return;
             }
             
             NSString * filename = url.lastPathComponent;
-            NSString * cachedFile = [NSTemporaryDirectory() stringByAppendingPathComponent:filename];
+            NSString * extension = [filename pathExtension];
+            NSFileManager * fileManager = [[NSFileManager alloc] init];
+            NSURL * cachedUrl;
             
-            NSFileManager * fileManager = NSFileManager.defaultManager;
-            
-            if([fileManager fileExistsAtPath:cachedFile]) {
-                [fileManager removeItemAtPath:cachedFile error:NULL];
+            // Check for live photos
+            if(self.allowCompression && [extension isEqualToString:@"pvt"]) {
+                NSArray * files = [fileManager contentsOfDirectoryAtURL:url includingPropertiesForKeys:@[] options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
+                
+                for (NSURL * item in files) {
+                    if (UTTypeConformsTo(UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, CFBridgingRetain([item pathExtension]), NULL), kUTTypeImage)) {
+                        
+                        UIImage * img = [UIImage imageWithContentsOfFile:item.path];
+                        NSString * fileName = [[item.path lastPathComponent] stringByDeletingPathExtension];
+                        NSData * data = UIImageJPEGRepresentation(img, 1);
+                        NSString * tmpFile = [NSTemporaryDirectory() stringByAppendingPathComponent:[fileName stringByAppendingString:@".jpeg"]];
+                        cachedUrl = [NSURL fileURLWithPath: tmpFile];
+
+                        if([fileManager fileExistsAtPath:tmpFile]) {
+                            [fileManager removeItemAtPath:tmpFile error:nil];
+                        }
+                        
+                        if([fileManager createFileAtPath:tmpFile contents:data attributes:nil]) {
+                            filename = tmpFile;
+                        } else {
+                            Log("%@ Error while caching picked Live photo", self);
+                        }
+                        break;
+                    }
+                }
+            } else {
+                NSString * cachedFile = [NSTemporaryDirectory() stringByAppendingPathComponent:filename];
+                
+                if([fileManager fileExistsAtPath:cachedFile]) {
+                    [fileManager removeItemAtPath:cachedFile error:NULL];
+                }
+                
+                cachedUrl = [NSURL fileURLWithPath: cachedFile];
+                
+                NSError *copyError;
+                [fileManager copyItemAtURL: url
+                                     toURL: cachedUrl
+                                     error: &copyError];
+                
+                if (copyError) {
+                    Log("%@ Error while caching picked file: %@", self, copyError);
+                    return;
+                }
             }
-            
+
             NSURL * cachedUrl = [NSURL fileURLWithPath: cachedFile];
             NSError *copyError;
             [NSFileManager.defaultManager copyItemAtURL: url
@@ -447,6 +513,14 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
             if(![urls[i].absoluteString isEqualToString:@""]){
                 [urlsNew addObject:urls[i]];
             }
+        }
+        
+        if(blockError) {
+            self->_result([FlutterError errorWithCode:@"file_picker_error"
+                                        message:@"Temporary file could not be created"
+                                        details:blockError.description]);
+            self->_result = nil;
+            return;
         }
         [self handleResult:urlsNew];
     });
@@ -494,6 +568,14 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 }
 
 #pragma mark - Actions canceled
+
+- (void)presentationControllerDidDismiss:(UIPresentationController *)controller {
+    Log(@"FilePicker canceled");
+    if (self.result != nil) {
+        self.result(nil);
+        self.result = nil;
+    }
+}
 
 - (void)mediaPickerDidCancel:(MPMediaPickerController *)controller {
     Log(@"FilePicker canceled");
