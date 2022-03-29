@@ -474,32 +474,31 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     }
     
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:results.count];
-    
-    //To keep same file order while import from gallery, manage index here.
-    for (int i = 0; i < results.count; i++) {
-        [urls addObject:[NSURL URLWithString:@""]];
-    }
+
+        //To keep same file order while import from gallery, manage index here.
+        for (int i = 0; i < results.count; i++) {
+            [urls addObject:[NSURL URLWithString:@""]];
+        }
 
     self.group = dispatch_group_create();
-    
+
     if(self->_eventSink != nil) {
         self->_eventSink([NSNumber numberWithBool:YES]);
     }
-    
-    __block NSError * blockError;
 
+    __block NSError * blockError;
     int indexOrder = 0;
     for (PHPickerResult *result in results) {
         dispatch_group_enter(_group);
         [result.itemProvider loadFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
-            
+
             if(url == nil) {
                 blockError = error;
                 Log("Could not load the picked given file: %@", blockError);
                 dispatch_group_leave(self->_group);
                 return;
             }
-            
+
             NSString * filename = url.lastPathComponent;
             NSString * extension = [filename pathExtension];
             NSFileManager * fileManager = [[NSFileManager alloc] init];
@@ -557,6 +556,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
             }
 
 
+
             //[urls addObject:cachedUrl];
             urls[indexOrder] = cachedUrl;
             //[urls addObject:cachedUrl];
@@ -564,7 +564,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
         }];
         indexOrder++;
     }
-    
+
     dispatch_group_notify(_group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),^{
         self->_group = nil;
         if(self->_eventSink != nil) {
@@ -577,7 +577,13 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                                         details:blockError.description]);
             self->_result = nil;
             return;
-        }
+        }        //Remove empty URLs
+                 NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
+                 for (int i = 0; i < results.count; i++) {
+                     if(![urls[i].absoluteString isEqualToString:@""]){
+                         [urlsNew addObject:urls[i]];
+                     }
+                 }
         //Remove empty URLs
         NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
         for (int i = 0; i < results.count; i++) {
@@ -586,19 +592,12 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
             }
         }
         //[self handleResult:urls];
-        [self handleResult:urlsNew];
+                 [self handleResult:urlsNew];
     });
 }
 
 #endif // PHPicker
 #endif // PICKER_MEDIA
-
-- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
-  if (_result != nil) {
-      _result(nil);
-      _result = nil;
-  }
-}
 
 
 #ifdef PICKER_AUDIO
@@ -607,26 +606,26 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 {
     [mediaPicker dismissViewControllerAnimated:YES completion:NULL];
     int numberOfItems = (int)[mediaItemCollection items].count;
-    
+
     if(numberOfItems == 0) {
         return;
     }
-    
+
     if(_eventSink != nil) {
         _eventSink([NSNumber numberWithBool:YES]);
     }
-    
+
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:numberOfItems];
-    
+
     for(MPMediaItemCollection * item in [mediaItemCollection items]) {
         NSURL * cachedAsset = [FileUtils exportMusicAsset: [item valueForKey:MPMediaItemPropertyAssetURL] withName: [item valueForKey:MPMediaItemPropertyTitle]];
         [urls addObject: cachedAsset];
     }
-    
+
     if(_eventSink != nil) {
         _eventSink([NSNumber numberWithBool:NO]);
     }
-    
+
     if(urls.count == 0) {
         Log(@"Couldn't retrieve the audio file path, either is not locally downloaded or the file is DRM protected.");
     }
