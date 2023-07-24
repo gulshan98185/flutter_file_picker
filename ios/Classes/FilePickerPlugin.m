@@ -577,13 +577,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
                                         details:blockError.description]);
             self->_result = nil;
             return;
-        }        //Remove empty URLs
-                 NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
-                 for (int i = 0; i < results.count; i++) {
-                     if(![urls[i].absoluteString isEqualToString:@""]){
-                         [urlsNew addObject:urls[i]];
-                     }
-                 }
+        }
         //Remove empty URLs
         NSMutableArray<NSURL *> * urlsNew = [[NSMutableArray alloc] initWithCapacity:results.count];
         for (int i = 0; i < results.count; i++) {
@@ -592,7 +586,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
             }
         }
         //[self handleResult:urls];
-                 [self handleResult:urlsNew];
+        [self handleResult:urlsNew];
     });
 }
 
