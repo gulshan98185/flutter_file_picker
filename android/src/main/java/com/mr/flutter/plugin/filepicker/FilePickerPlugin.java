@@ -22,12 +22,12 @@ import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
-import io.flutter.plugin.common.PluginRegistry;
+// import io.flutter.plugin.common.PluginRegistry;
 
 /**
  * FilePickerPlugin
  */
-@SuppressWarnings("deprecation")
+
 public class FilePickerPlugin implements MethodChannel.MethodCallHandler, FlutterPlugin, ActivityAware {
 
     private static final String TAG = "FilePicker";
@@ -117,24 +117,24 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
     /**
      * Plugin registration.
      */
-    public static void registerWith(final io.flutter.plugin.common.PluginRegistry.Registrar registrar) {
+    // public static void registerWith(final io.flutter.plugin.common.PluginRegistry.Registrar registrar) {
 
-        if (registrar.activity() == null) {
-            // If a background flutter view tries to register the plugin, there will be no activity from the registrar,
-            // we stop the registering process immediately because the ImagePicker requires an activity.
-            return;
-        }
+    //     if (registrar.activity() == null) {
+    //         // If a background flutter view tries to register the plugin, there will be no activity from the registrar,
+    //         // we stop the registering process immediately because the ImagePicker requires an activity.
+    //         return;
+    //     }
 
-        final Activity activity = registrar.activity();
-        Application application = null;
-        if (registrar.context() != null) {
-            application = (Application) (registrar.context().getApplicationContext());
-        }
+    //     final Activity activity = registrar.activity();
+    //     Application application = null;
+    //     if (registrar.context() != null) {
+    //         application = (Application) (registrar.context().getApplicationContext());
+    //     }
 
-        final FilePickerPlugin plugin = new FilePickerPlugin();
-        plugin.setup(registrar.messenger(), application, activity, registrar, null);
+    //     final FilePickerPlugin plugin = new FilePickerPlugin();
+    //     plugin.setup(registrar.messenger(), application, activity, registrar, null);
 
-    }
+    // }
 
 
     @SuppressWarnings("unchecked")
@@ -244,8 +244,7 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
     private void setup(
             final BinaryMessenger messenger,
             final Application application,
-            final Activity activity,
-            final PluginRegistry.Registrar registrar,
+            final Activity activity,        
             final ActivityPluginBinding activityBinding) {
 
         this.activity = activity;
@@ -265,18 +264,18 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
             }
         });
         this.observer = new LifeCycleObserver(activity);
-        if (registrar != null) {
-            // V1 embedding setup for activity listeners.
-            application.registerActivityLifecycleCallbacks(this.observer);
-            registrar.addActivityResultListener(this.delegate);
-            registrar.addRequestPermissionsResultListener(this.delegate);
-        } else {
+        // if (registrar != null) {
+        //     // V1 embedding setup for activity listeners.
+        //     application.registerActivityLifecycleCallbacks(this.observer);
+        //     registrar.addActivityResultListener(this.delegate);
+        //     registrar.addRequestPermissionsResultListener(this.delegate);
+        // } else {
             // V2 embedding setup for activity listeners.
             activityBinding.addActivityResultListener(this.delegate);
             activityBinding.addRequestPermissionsResultListener(this.delegate);
             this.lifecycle = FlutterLifecycleAdapter.getActivityLifecycle(activityBinding);
             this.lifecycle.addObserver(this.observer);
-        }
+        // }
     }
 
     private void tearDown() {
@@ -285,7 +284,7 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
         this.activityBinding = null;
         if(this.observer != null) {
             this.lifecycle.removeObserver(this.observer);
-            this.application.unregisterActivityLifecycleCallbacks(this.observer);
+            // this.application.unregisterActivityLifecycleCallbacks(this.observer);
         }
         this.lifecycle = null;
         this.delegate.setEventHandler(null);
@@ -296,7 +295,7 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
     }
 
     @Override
-    public void onAttachedToEngine(final FlutterPluginBinding binding) {
+    public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
         this.pluginBinding = binding;
     }
 
