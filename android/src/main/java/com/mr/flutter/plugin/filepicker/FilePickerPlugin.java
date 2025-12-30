@@ -311,7 +311,6 @@ public class FilePickerPlugin implements MethodChannel.MethodCallHandler, Flutte
                 this.pluginBinding.getBinaryMessenger(),
                 (Application) this.pluginBinding.getApplicationContext(),
                 this.activityBinding.getActivity(),
-                null,
                 this.activityBinding);
     }
 
